@@ -2,14 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- THIS IS THE MISSING PIECE FOR MOBILE RENDERING -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reddit Saved Posts Visualizer</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <title>Reddit TXT Links Visualizer</title>
   <style>
     /* Base Desktop Variables */
-    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f4f4f5; color: #18181b; }
-    .controls { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f4f4f5; color: #18181b; padding-bottom: 4rem; }
+    
+    /* FLOATING TOP BAR */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      background: #111827;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .counter { font-weight: 600; font-size: 1.1rem; }
+    .btn-scroll-top { background: #374151; color: white; padding: 0.5rem 1rem; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; }
+    .btn-scroll-top:hover { background: #4b5563; }
+
+    /* Main Container */
+    .main-content { padding: 2rem; }
+    .controls { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
     .grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
     
     /* Card Layout */
@@ -28,9 +46,8 @@
     button { cursor: pointer; padding: 0.5rem 0.75rem; border: none; border-radius: 4px; font-weight: 500; transition: background 0.2s; }
     .btn-copy { background: #2563eb; color: white; width: 100px; }
     .btn-delete { background: #dc2626; color: white; }
-    .btn-export { background: #16a34a; color: white; margin-left: auto; }
+    .btn-export { background: #16a34a; color: white; padding: 0.5rem 1rem; font-weight: bold; }
     
-    /* Prominent Open Button anchored right */
     .btn-open { 
       margin-left: auto; 
       background: #4b5563; 
@@ -42,18 +59,29 @@
       text-align: center; 
     }
     
-    .pagination { display: flex; gap: 1rem; align-items: center; margin-left: auto; }
-    .pagination button { background: #e4e4e7; color: #18181b; }
-    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* Bottom Navigation */
+    .bottom-nav {
+      background: white;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .bottom-nav button { background: #e4e4e7; color: #18181b; padding: 0.75rem 1.5rem; font-size: 1rem; }
+    .bottom-nav button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* MOBILE ENHANCEMENTS (Triggers on screens 768px or smaller) */
+    /* MOBILE ENHANCEMENTS */
     @media (max-width: 768px) {
-      body { margin: 0.5rem; }
+      .top-bar { padding: 1rem; }
+      .main-content { padding: 0.5rem; }
       .grid { grid-template-columns: 1fr; gap: 1rem; } 
       .card { padding: 1rem; } 
       .reddit-embed-bq { height: 250px; } 
       
-      /* Massively enlarge the Open Button */
       .btn-open {
         padding: 1rem 2rem;
         font-size: 1.25rem;
@@ -61,70 +89,93 @@
         background: #111827; 
       }
       
-      .btn-copy, .btn-delete {
-        padding: 0.75rem;
-        font-size: 0.85rem;
-      }
+      .btn-copy, .btn-delete { padding: 0.75rem; font-size: 0.85rem; }
+      .bottom-nav { flex-direction: column; gap: 1rem; }
+      .bottom-nav button { width: 100%; }
     }
   </style>
 </head>
 <body>
 
-  <div class="controls">
-    <input type="file" id="csvFileInput" accept=".csv">
-    
-    <div class="pagination" id="paginationControls" style="display:none;">
-      <button id="prevBtn" onclick="changePage(-1)">Previous</button>
-      <span id="pageInfo">Page 1</span>
-      <button id="nextBtn" onclick="changePage(1)">Next</button>
-    </div>
-
-    <button id="exportBtn" class="btn-export" style="display:none;">Download Updated CSV</button>
+  <!-- Floating Bar -->
+  <div class="top-bar">
+    <div class="counter" id="recordCounter">Links remaining: 0</div>
+    <button class="btn-scroll-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">↑ Top</button>
   </div>
 
-  <div id="container" class="grid"></div>
+  <div class="main-content">
+    <div class="controls">
+      <input type="file" id="txtFileInput" accept=".txt">
+      <button id="exportBtn" class="btn-export" style="display:none;">Download Updated TXT</button>
+    </div>
+
+    <div id="container" class="grid"></div>
+
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav" id="paginationControls" style="display:none;">
+      <button id="prevBtn" onclick="changePage(-1)">Previous Page</button>
+      <span id="pageInfo" style="font-weight: bold;">Page 1</span>
+      <button id="nextBtn" onclick="changePage(1)">Next Page</button>
+    </div>
+  </div>
 
   <script>
-    let records = [];
+    let records = []; // This will now store an array of strings (URLs)
     let currentPage = 1;
-    const itemsPerPage = 50;
+    const itemsPerPage = 100;
 
+    // Tokenize string to extract Sub, ID, and Title
     function extractDataFromUrl(url) {
-      if (!url) return { sub: 'Unknown', title: 'Invalid URL', user: 'unknown' };
+      if (!url || typeof url !== 'string') return { sub: 'Unknown', title: 'Invalid URL', id: 'N/A' };
+      
       const parts = url.split('/').filter(Boolean);
       let sub = "Unknown";
       let title = "Unknown";
+      let id = "N/A";
 
       const rIndex = parts.indexOf("r");
       if (rIndex !== -1 && parts.length > rIndex + 1) {
         sub = parts[rIndex + 1];
       }
+      
       const commentsIndex = parts.indexOf("comments");
-      if (commentsIndex !== -1 && parts.length > commentsIndex + 2) {
-        let rawTitle = parts[commentsIndex + 2].replace(/_/g, ' ');
-        title = decodeURIComponent(rawTitle);
+      if (commentsIndex !== -1) {
+        if (parts.length > commentsIndex + 1) {
+            id = parts[commentsIndex + 1];
+        }
+        if (parts.length > commentsIndex + 2) {
+            let rawTitle = parts[commentsIndex + 2].replace(/_/g, ' ');
+            title = decodeURIComponent(rawTitle);
+        }
       }
-      return { sub, title };
+      return { sub, title, id };
     }
 
-    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+    // 1. Native FileReader for .txt files
+    document.getElementById('txtFileInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
 
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-          records = results.data;
-          currentPage = 1;
-          render();
-          document.getElementById('exportBtn').style.display = 'inline-block';
-          document.getElementById('paginationControls').style.display = 'flex';
-        }
-      });
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        // Read file contents, split by line break, remove whitespace, and drop empty lines
+        const textData = event.target.result;
+        records = textData.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+        
+        currentPage = 1;
+        render();
+        document.getElementById('exportBtn').style.display = 'inline-block';
+        document.getElementById('paginationControls').style.display = 'flex';
+      };
+      reader.readAsText(file);
     });
 
+    function updateCounter() {
+      document.getElementById('recordCounter').innerText = `Links remaining: ${records.length}`;
+    }
+
     function render() {
+      updateCounter();
       const container = document.getElementById('container');
       container.innerHTML = '';
 
@@ -137,8 +188,7 @@
       const endIndex = Math.min(startIndex + itemsPerPage, records.length);
       const pageData = records.slice(startIndex, endIndex);
 
-      pageData.forEach((row, index) => {
-        const url = row.permalink;
+      pageData.forEach((url, index) => {
         const extracted = extractDataFromUrl(url);
         const absoluteIndex = startIndex + index;
         
@@ -149,7 +199,7 @@
           <div class="card-header">
             <div class="card-sub">r/${extracted.sub}</div>
             <div class="card-title">${extracted.title}</div>
-            <div class="card-id">ID: ${row.id}</div>
+            <div class="card-id">ID: ${extracted.id}</div>
           </div>
           <div class="card-content">
             <blockquote class="reddit-embed-bq">
@@ -160,7 +210,6 @@
           <div class="card-actions">
             <button class="btn-copy" id="copy-${absoluteIndex}" onclick="copyLink('${url}', 'copy-${absoluteIndex}')">Copy Link</button>
             <button class="btn-delete" onclick="deleteRecord(${absoluteIndex})">Delete</button>
-            <!-- Open button moved to the bottom right in the DOM -->
             <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn-open">Open</a>
           </div>
         `;
@@ -188,6 +237,7 @@
       if (currentPage < 1) currentPage = 1;
       if (currentPage > totalPages) currentPage = totalPages;
       render();
+      window.scrollTo({top: 0, behavior: 'smooth'}); // Auto-scroll to top on page change
     }
 
     function copyLink(url, buttonId) {
@@ -213,12 +263,13 @@
       render();
     }
 
+    // Export updated .txt file natively
     document.getElementById('exportBtn').addEventListener('click', function() {
-      const csv = Papa.unparse(records);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const txtContent = records.join('\\n');
+      const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', 'updated_saved_posts.csv');
+      link.setAttribute('download', 'updated_saved_posts.txt');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
