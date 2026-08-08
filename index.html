@@ -2,29 +2,70 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- THIS IS THE MISSING PIECE FOR MOBILE RENDERING -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reddit Saved Posts Visualizer</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
+    /* Base Desktop Variables */
     body { font-family: system-ui, sans-serif; margin: 2rem; background: #f4f4f5; color: #18181b; }
-    .controls { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 1rem; align-items: center; }
+    .controls { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
     .grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+    
+    /* Card Layout */
     .card { background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e4e4e7; display: flex; flex-direction: column; }
     .card-header { margin-bottom: 1rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 1rem; }
     .card-sub { font-size: 0.85rem; font-weight: bold; color: #ef4444; text-transform: uppercase; margin-bottom: 0.5rem; }
     .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; line-height: 1.4; color: #111827; text-transform: capitalize; }
     .card-id { font-size: 0.75rem; color: #71717a; font-family: monospace; }
-    .card-content { flex-grow: 1; margin-bottom: 1rem; min-height: 200px; }
-    .card-actions { display: flex; gap: 0.5rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid #e4e4e7; }
     
+    /* Embed Container */
+    .card-content { flex-grow: 1; margin-bottom: 1rem; }
+    .reddit-embed-bq { height: 350px; } 
+
+    /* Action Buttons */
+    .card-actions { display: flex; gap: 0.5rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid #e4e4e7; align-items: center; }
     button { cursor: pointer; padding: 0.5rem 0.75rem; border: none; border-radius: 4px; font-weight: 500; transition: background 0.2s; }
     .btn-copy { background: #2563eb; color: white; width: 100px; }
     .btn-delete { background: #dc2626; color: white; }
     .btn-export { background: #16a34a; color: white; margin-left: auto; }
-    .btn-open { background: #4b5563; color: white; text-decoration: none; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.875rem; text-align: center; }
+    
+    /* Prominent Open Button anchored right */
+    .btn-open { 
+      margin-left: auto; 
+      background: #4b5563; 
+      color: white; 
+      text-decoration: none; 
+      padding: 0.5rem 1rem; 
+      border-radius: 4px; 
+      font-weight: 600;
+      text-align: center; 
+    }
     
     .pagination { display: flex; gap: 1rem; align-items: center; margin-left: auto; }
     .pagination button { background: #e4e4e7; color: #18181b; }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* MOBILE ENHANCEMENTS (Triggers on screens 768px or smaller) */
+    @media (max-width: 768px) {
+      body { margin: 0.5rem; }
+      .grid { grid-template-columns: 1fr; gap: 1rem; } 
+      .card { padding: 1rem; } 
+      .reddit-embed-bq { height: 250px; } 
+      
+      /* Massively enlarge the Open Button */
+      .btn-open {
+        padding: 1rem 2rem;
+        font-size: 1.25rem;
+        border-radius: 8px;
+        background: #111827; 
+      }
+      
+      .btn-copy, .btn-delete {
+        padding: 0.75rem;
+        font-size: 0.85rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -46,7 +87,7 @@
   <script>
     let records = [];
     let currentPage = 1;
-    const itemsPerPage = 10; // Strictly capped to prevent memory crashes
+    const itemsPerPage = 50;
 
     function extractDataFromUrl(url) {
       if (!url) return { sub: 'Unknown', title: 'Invalid URL', user: 'unknown' };
@@ -87,7 +128,6 @@
       const container = document.getElementById('container');
       container.innerHTML = '';
 
-      // Pagination logic
       const totalPages = Math.ceil(records.length / itemsPerPage) || 1;
       document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
       document.getElementById('prevBtn').disabled = currentPage === 1;
@@ -105,7 +145,6 @@
         const card = document.createElement('div');
         card.className = 'card';
         
-        // Assembled HTML using the exact Reddit blockquote standard
         card.innerHTML = `
           <div class="card-header">
             <div class="card-sub">r/${extracted.sub}</div>
@@ -113,15 +152,16 @@
             <div class="card-id">ID: ${row.id}</div>
           </div>
           <div class="card-content">
-            <blockquote class="reddit-embed-bq" style="height:350px">
+            <blockquote class="reddit-embed-bq">
               <a href="${url}">${extracted.title}</a><br> in
               <a href="https://www.reddit.com/r/${extracted.sub}/">r/${extracted.sub}</a>
             </blockquote>
           </div>
           <div class="card-actions">
-            <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn-open">Open</a>
             <button class="btn-copy" id="copy-${absoluteIndex}" onclick="copyLink('${url}', 'copy-${absoluteIndex}')">Copy Link</button>
             <button class="btn-delete" onclick="deleteRecord(${absoluteIndex})">Delete</button>
+            <!-- Open button moved to the bottom right in the DOM -->
+            <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn-open">Open</a>
           </div>
         `;
         container.appendChild(card);
@@ -130,7 +170,6 @@
       triggerRedditEmbed();
     }
 
-    // Force DOM to execute the Reddit widget script
     function triggerRedditEmbed() {
       const oldScript = document.getElementById('reddit-embed-script');
       if (oldScript) oldScript.remove();
@@ -167,7 +206,6 @@
     function deleteRecord(absoluteIndex) {
       records.splice(absoluteIndex, 1);
       
-      // Handle edge case: deleting the last item on a page
       const totalPages = Math.ceil(records.length / itemsPerPage);
       if (currentPage > totalPages && currentPage > 1) {
         currentPage--;
