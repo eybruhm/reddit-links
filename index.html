@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reddit Saved Posts Visualizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; background: #f4f4f5; color: #18181b; }
+    .controls { background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; gap: 1rem; align-items: center; }
+    .grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e4e4e7; display: flex; flex-direction: column; }
+    .card-header { margin-bottom: 1rem; border-bottom: 1px solid #e4e4e7; padding-bottom: 1rem; }
+    .card-sub { font-size: 0.85rem; font-weight: bold; color: #ef4444; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; line-height: 1.4; color: #111827; text-transform: capitalize; }
+    .card-id { font-size: 0.75rem; color: #71717a; font-family: monospace; }
+    .card-content { flex-grow: 1; margin-bottom: 1rem; min-height: 200px; }
+    .card-actions { display: flex; gap: 0.5rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid #e4e4e7; }
+    
+    button { cursor: pointer; padding: 0.5rem 0.75rem; border: none; border-radius: 4px; font-weight: 500; transition: background 0.2s; }
+    .btn-copy { background: #2563eb; color: white; width: 100px; }
+    .btn-delete { background: #dc2626; color: white; }
+    .btn-export { background: #16a34a; color: white; margin-left: auto; }
+    .btn-open { background: #4b5563; color: white; text-decoration: none; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.875rem; text-align: center; }
+    
+    .pagination { display: flex; gap: 1rem; align-items: center; margin-left: auto; }
+    .pagination button { background: #e4e4e7; color: #18181b; }
+    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="controls">
+    <input type="file" id="csvFileInput" accept=".csv">
+    
+    <div class="pagination" id="paginationControls" style="display:none;">
+      <button id="prevBtn" onclick="changePage(-1)">Previous</button>
+      <span id="pageInfo">Page 1</span>
+      <button id="nextBtn" onclick="changePage(1)">Next</button>
+    </div>
+
+    <button id="exportBtn" class="btn-export" style="display:none;">Download Updated CSV</button>
+  </div>
+
+  <div id="container" class="grid"></div>
+
+  <script>
+    let records = [];
+    let currentPage = 1;
+    const itemsPerPage = 10; // Strictly capped to prevent memory crashes
+
+    function extractDataFromUrl(url) {
+      if (!url) return { sub: 'Unknown', title: 'Invalid URL', user: 'unknown' };
+      const parts = url.split('/').filter(Boolean);
+      let sub = "Unknown";
+      let title = "Unknown";
+
+      const rIndex = parts.indexOf("r");
+      if (rIndex !== -1 && parts.length > rIndex + 1) {
+        sub = parts[rIndex + 1];
+      }
+      const commentsIndex = parts.indexOf("comments");
+      if (commentsIndex !== -1 && parts.length > commentsIndex + 2) {
+        let rawTitle = parts[commentsIndex + 2].replace(/_/g, ' ');
+        title = decodeURIComponent(rawTitle);
+      }
+      return { sub, title };
+    }
+
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          records = results.data;
+          currentPage = 1;
+          render();
+          document.getElementById('exportBtn').style.display = 'inline-block';
+          document.getElementById('paginationControls').style.display = 'flex';
+        }
+      });
+    });
+
+    function render() {
+      const container = document.getElementById('container');
+      container.innerHTML = '';
+
+      // Pagination logic
+      const totalPages = Math.ceil(records.length / itemsPerPage) || 1;
+      document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
+      document.getElementById('prevBtn').disabled = currentPage === 1;
+      document.getElementById('nextBtn').disabled = currentPage === totalPages;
+
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, records.length);
+      const pageData = records.slice(startIndex, endIndex);
+
+      pageData.forEach((row, index) => {
+        const url = row.permalink;
+        const extracted = extractDataFromUrl(url);
+        const absoluteIndex = startIndex + index;
+        
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        // Assembled HTML using the exact Reddit blockquote standard
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-sub">r/${extracted.sub}</div>
+            <div class="card-title">${extracted.title}</div>
+            <div class="card-id">ID: ${row.id}</div>
+          </div>
+          <div class="card-content">
+            <blockquote class="reddit-embed-bq" style="height:350px">
+              <a href="${url}">${extracted.title}</a><br> in
+              <a href="https://www.reddit.com/r/${extracted.sub}/">r/${extracted.sub}</a>
+            </blockquote>
+          </div>
+          <div class="card-actions">
+            <a href="${url}" target="_blank" rel="noopener noreferrer" class="btn-open">Open</a>
+            <button class="btn-copy" id="copy-${absoluteIndex}" onclick="copyLink('${url}', 'copy-${absoluteIndex}')">Copy Link</button>
+            <button class="btn-delete" onclick="deleteRecord(${absoluteIndex})">Delete</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      triggerRedditEmbed();
+    }
+
+    // Force DOM to execute the Reddit widget script
+    function triggerRedditEmbed() {
+      const oldScript = document.getElementById('reddit-embed-script');
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement('script');
+      script.id = 'reddit-embed-script';
+      script.src = 'https://embed.reddit.com/widgets.js';
+      script.async = true;
+      script.charset = 'UTF-8';
+      document.body.appendChild(script);
+    }
+
+    function changePage(direction) {
+      const totalPages = Math.ceil(records.length / itemsPerPage);
+      currentPage += direction;
+      if (currentPage < 1) currentPage = 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+      render();
+    }
+
+    function copyLink(url, buttonId) {
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById(buttonId);
+        const originalText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.style.background = '#16a34a'; 
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.background = '';
+        }, 1500);
+      });
+    }
+
+    function deleteRecord(absoluteIndex) {
+      records.splice(absoluteIndex, 1);
+      
+      // Handle edge case: deleting the last item on a page
+      const totalPages = Math.ceil(records.length / itemsPerPage);
+      if (currentPage > totalPages && currentPage > 1) {
+        currentPage--;
+      }
+      render();
+    }
+
+    document.getElementById('exportBtn').addEventListener('click', function() {
+      const csv = Papa.unparse(records);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute('download', 'updated_saved_posts.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  </script>
+</body>
+</html>
